@@ -35,18 +35,41 @@ const INITIAL_MESSAGE: Message = {
 };
 
 export function FreeChatPanel({ isOpen, onClose, topicId }: FreeChatPanelProps) {
-    const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
-    const [inputText, setInputText] = useState('');
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [messages, setMessages] = useState<Message[]>(() => {
+        const storageKey = `mindmap_free_chat_${topicId || 'default'}`;
+        const saved = localStorage.getItem(storageKey);
+        if (saved) return JSON.parse(saved);
 
-    // トピックが切り替わったらメッセージをリセットする
-    useEffect(() => {
-        setMessages([{
+        return [{
             ...INITIAL_MESSAGE,
             id: `system-init-${topicId || 'default'}`,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }]);
+        }];
+    });
+
+    const [inputText, setInputText] = useState('');
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // トピックが切り替わったらlocalStorageから履歴を再取得。無ければ初期化。
+    useEffect(() => {
+        const storageKey = `mindmap_free_chat_${topicId || 'default'}`;
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+            setMessages(JSON.parse(saved));
+        } else {
+            setMessages([{
+                ...INITIAL_MESSAGE,
+                id: `system-init-${topicId || 'default'}`,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }]);
+        }
     }, [topicId]);
+
+    // messagesが更新されるたびにlocalStorageへ保存
+    useEffect(() => {
+        const storageKey = `mindmap_free_chat_${topicId || 'default'}`;
+        localStorage.setItem(storageKey, JSON.stringify(messages));
+    }, [messages, topicId]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

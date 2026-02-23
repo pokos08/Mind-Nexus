@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { BarChart3, X, Users, MessageSquareText, Eye, TrendingUp, TrendingDown } from 'lucide-react';
 import './AnalyticsPanel.css';
 
@@ -9,13 +10,24 @@ interface AnalyticsPanelProps {
 export const AnalyticsPanel = ({ isOpen, onClose }: AnalyticsPanelProps) => {
     if (!isOpen) return null;
 
-    // モックデータ (初期化)
-    const analyticsData = {
+    // 初期モックデータ
+    const defaultData = {
         liveViewers: { value: 0, trend: 'neutral', change: '-', label: '現在のアクティブユーザー' },
         totalVisitors: { value: '0', trend: 'neutral', change: '-', label: '累計訪問者数 (今月)' },
         totalComments: { value: '0', trend: 'neutral', change: '-', label: '総コメント数 (今週)' },
         avgTimeOnSite: { value: '0m 0s', trend: 'neutral', change: '-', label: '平均滞在時間' },
     };
+
+    // localStorageからデータを取得するロジック
+    const [analyticsData, setAnalyticsData] = useState(() => {
+        const savedData = localStorage.getItem('mindmap_analytics');
+        return savedData ? JSON.parse(savedData) : defaultData;
+    });
+
+    // データ変更時にlocalStorageへ保存
+    useEffect(() => {
+        localStorage.setItem('mindmap_analytics', JSON.stringify(analyticsData));
+    }, [analyticsData]);
 
     return (
         <div className="analytics-panel open">

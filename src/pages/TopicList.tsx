@@ -8,13 +8,31 @@ type SortType = 'latest' | 'popular' | 'views';
 
 export function TopicList() {
     const navigate = useNavigate();
-    const [topics, setTopics] = useState<Topic[]>(initialTopics);
+
+    // localStorageから初期データを取得するロジック
+    const [topics, setTopics] = useState<Topic[]>(() => {
+        const savedTopics = localStorage.getItem('mindmap_topics');
+        return savedTopics ? JSON.parse(savedTopics) : initialTopics;
+    });
+
     const [searchQuery, setSearchQuery] = useState('');
     const [sortType, setSortType] = useState<SortType>('latest');
     const [newTopicTitle, setNewTopicTitle] = useState('');
 
-    // 各トピックに対するユーザー自身の「いいね」回数（最大10回）
-    const [userLikes, setUserLikes] = useState<Record<string, number>>({});
+    // localStorageから「いいね」履歴を取得
+    const [userLikes, setUserLikes] = useState<Record<string, number>>(() => {
+        const savedLikes = localStorage.getItem('mindmap_userLikes');
+        return savedLikes ? JSON.parse(savedLikes) : {};
+    });
+
+    // 状態が変更されるたびにlocalStorageへ保存
+    useEffect(() => {
+        localStorage.setItem('mindmap_topics', JSON.stringify(topics));
+    }, [topics]);
+
+    useEffect(() => {
+        localStorage.setItem('mindmap_userLikes', JSON.stringify(userLikes));
+    }, [userLikes]);
 
     // 検索とソートロジック
     const filteredAndSortedTopics = useMemo(() => {

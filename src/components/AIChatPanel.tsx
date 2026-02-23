@@ -15,13 +15,23 @@ interface AIChatPanelProps {
 }
 
 export function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            id: '1',
-            role: 'ai',
-            content: 'こんにちは！マインドマップの作成で分からないことや、アイデアの相談があれば何でもどうぞ。',
-        },
-    ]);
+    const [messages, setMessages] = useState<Message[]>(() => {
+        const savedMessages = localStorage.getItem('mindmap_ai_chat');
+        if (savedMessages) {
+            return JSON.parse(savedMessages);
+        }
+        return [
+            {
+                id: '1',
+                role: 'ai',
+                content: 'こんにちは！マインドマップの作成で分からないことや、アイデアの相談があれば何でもどうぞ。',
+            },
+        ];
+    });
+
+    useEffect(() => {
+        localStorage.setItem('mindmap_ai_chat', JSON.stringify(messages));
+    }, [messages]);
     const [input, setInput] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);

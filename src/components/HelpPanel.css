@@ -119,11 +119,11 @@
     font-size: 1.15rem;
     font-weight: 600;
     margin-bottom: 8px;
-    color: #f8fafc;
+    color: var(--text-color);
 }
 
 .help-text p {
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(30, 41, 59, 0.8);
     line-height: 1.6;
     font-size: 0.95rem;
 }
