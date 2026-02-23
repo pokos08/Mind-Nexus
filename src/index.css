@@ -1,0 +1,38 @@
+:root {
+  --bg-color: #e0f2fe;
+  /* Tailwind Light Blue 100 */
+  --text-color: #1e293b;
+  /* Slate 800 */
+  --accent-color: #38bdf8;
+  /* Light Blue 400 */
+  --accent-hover: #0ea5e9;
+  /* Light Blue 500 */
+  --glass-bg: rgba(255, 255, 255, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --bento-bg: rgba(255, 255, 255, 0.85);
+  /* Bento UI Box Background */
+  --bento-radius: 24px;
+  /* Bento UI Box Radius */
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', 'Quicksand', 'Nunito', sans-serif;
+  /* 丸みのあるフォントをフォールバックに */
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  overflow: hidden;
+  /* マインドマップ用キャンバスなのでスクロールは内部で処理 */
+}
+
+.app-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}

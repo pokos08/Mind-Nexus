@@ -1,0 +1,64 @@
+.add-node-panel {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 100px;
+    /* Pill shape */
+    padding: 8px 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+    width: 90%;
+    max-width: 500px;
+}
+
+.add-node-form {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.add-node-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    font-size: 15px;
+    padding: 8px 12px;
+    outline: none;
+}
+
+.add-node-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.add-node-button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+}
+
+.add-node-button:hover:not(:disabled) {
+    background: var(--accent-hover);
+    box-shadow: 0 0 15px rgba(96, 165, 250, 0.6);
+}
+
+.add-node-button:disabled {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.3);
+    cursor: not-allowed;
+    box-shadow: none;
+}

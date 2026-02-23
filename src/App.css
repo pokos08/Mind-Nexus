@@ -1,0 +1,109 @@
+.app-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    width: 100vw;
+    background-color: var(--bg-color);
+}
+
+.header {
+    height: 60px;
+    background: var(--bento-bg);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--bento-radius);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 24px;
+    margin: 20px 24px 0 24px;
+    z-index: 10;
+    box-shadow: 0 8px 32px rgba(14, 165, 233, 0.05);
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.logo-icon {
+    color: var(--accent-color);
+    filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.5));
+}
+
+.logo h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    background: linear-gradient(to right, #38bdf8, #818cf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: 0.5px;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+}
+
+.chat-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(56, 189, 248, 0.1);
+    /* 淡いブルーの背景 */
+    border: 1px solid var(--glass-border);
+    color: var(--text-color);
+    padding: 8px 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.chat-toggle-btn:hover {
+    background: rgba(56, 189, 248, 0.2);
+    border-color: rgba(56, 189, 248, 0.5);
+}
+
+.chat-toggle-btn.active {
+    background: var(--accent-color);
+    border-color: var(--accent-hover);
+    color: #ffffff;
+    /* アクティブ時は白文字で目立たせる */
+}
+
+
+.main-content {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.mindmap-container {
+    width: 100%;
+    height: 100%;
+}
+
+/* React Flow custom styling */
+.react-flow__controls {
+    box-shadow: 0 8px 32px rgba(14, 165, 233, 0.1) !important;
+    background: var(--bento-bg) !important;
+    border: 1px solid var(--glass-border) !important;
+    border-radius: 16px !important;
+    backdrop-filter: blur(10px) !important;
+}
+
+.react-flow__controls-button {
+    background: transparent !important;
+    border-bottom-color: var(--glass-border) !important;
+    fill: var(--text-color) !important;
+    transition: all 0.2s ease;
+}
+
+.react-flow__controls-button:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+}
