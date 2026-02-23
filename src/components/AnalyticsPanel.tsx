@@ -9,12 +9,12 @@ interface AnalyticsPanelProps {
 export const AnalyticsPanel = ({ isOpen, onClose }: AnalyticsPanelProps) => {
     if (!isOpen) return null;
 
-    // モックデータ
+    // モックデータ (初期化)
     const analyticsData = {
-        liveViewers: { value: 124, trend: 'up', change: '+12%', label: '現在のアクティブユーザー' },
-        totalVisitors: { value: '8,432', trend: 'up', change: '+5.4%', label: '累計訪問者数 (今月)' },
-        totalComments: { value: '1,205', trend: 'down', change: '-2.1%', label: '総コメント数 (今週)' },
-        avgTimeOnSite: { value: '4m 32s', trend: 'up', change: '+18%', label: '平均滞在時間' },
+        liveViewers: { value: 0, trend: 'neutral', change: '-', label: '現在のアクティブユーザー' },
+        totalVisitors: { value: '0', trend: 'neutral', change: '-', label: '累計訪問者数 (今月)' },
+        totalComments: { value: '0', trend: 'neutral', change: '-', label: '総コメント数 (今週)' },
+        avgTimeOnSite: { value: '0m 0s', trend: 'neutral', change: '-', label: '平均滞在時間' },
     };
 
     return (

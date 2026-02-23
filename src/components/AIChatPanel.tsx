@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Bot, Send, X, User } from 'lucide-react';
+import { GoogleGenAI } from '@google/genai';
 import './AIChatPanel.css';
 
 interface Message {
@@ -33,30 +34,65 @@ export function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
         scrollToBottom();
     }, [messages, isTyping]);
 
-    const handleSend = (e: React.FormEvent) => {
+    const handleSend = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!input.trim()) return;
+        if (!input.trim() || isTyping) return;
 
+        const userText = input;
         const userMessage: Message = {
             id: Date.now().toString(),
             role: 'user',
-            content: input,
+            content: userText,
         };
 
         setMessages((prev) => [...prev, userMessage]);
         setInput('');
         setIsTyping(true);
 
-        // ダミーのAI応答を遅延して追加
-        setTimeout(() => {
+        try {
+            // apiKeyはローカルの.env.local、もしくはVercel環境変数から取得
+            const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+            if (!apiKey) {
+                throw new Error("APIキーが設定されていません。VITE_GEMINI_API_KEY を確認してください。");
+            }
+
+            const ai = new GoogleGenAI({ apiKey });
+
+            // これまでの会話履歴を作成してコンテキストを持たせる
+            const contents = messages.map(msg => ({
+                role: msg.role === 'ai' ? 'model' : 'user',
+                parts: [{ text: msg.content }]
+            }));
+
+            // 初回システムの挨拶は省略する等の工夫も可能ですが、今回はそのまま送信
+            contents.push({
+                role: 'user',
+                parts: [{ text: userText }]
+            });
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: contents
+            });
+
             const aiResponse: Message = {
                 id: (Date.now() + 1).toString(),
                 role: 'ai',
-                content: `「${userMessage.content}」についてですね！現在はダミー応答を使用していますが、将来APIキーを登録することで本物のAIと通話できるようになります。`,
+                content: response.text || '回答を取得できませんでした。',
             };
             setMessages((prev) => [...prev, aiResponse]);
+
+        } catch (error) {
+            console.error("Gemini API Error:", error);
+            const errorMessage: Message = {
+                id: (Date.now() + 1).toString(),
+                role: 'ai',
+                content: `エラーが発生しました: ${(error as Error).message}`,
+            };
+            setMessages((prev) => [...prev, errorMessage]);
+        } finally {
             setIsTyping(false);
-        }, 1500);
+        }
     };
 
     if (!isOpen) return null;
