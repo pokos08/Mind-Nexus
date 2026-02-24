@@ -185,9 +185,19 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
 
                 // 新規作成されたばかり（DBが空）の場合、rootノードを作成してDBへ保存
                 if (formattedNodes.length === 0) {
+                    let rootLabel = initialTopicTitle;
+
+                    // プロパティからタイトルが渡ってこなかった場合（直接URLアクセス等）、DBのtopicsテーブルから取得を試みる
+                    if (!rootLabel && topicId && topicId.includes('-')) {
+                        const { data: topicData } = await supabase.from('topics').select('title').eq('id', topicId).single();
+                        if (topicData) {
+                            rootLabel = topicData.title;
+                        }
+                    }
+
                     const rootNode: Node = {
                         id: 'root',
-                        data: { label: initialTopicTitle || '新しい疑問トピック', depth: 0 } as CustomNodeData,
+                        data: { label: rootLabel || '新しい疑問トピック', depth: 0 } as CustomNodeData,
                         position: { x: 400, y: 100 },
                         type: 'question',
                     };
