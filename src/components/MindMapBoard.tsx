@@ -195,8 +195,9 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
                         }
                     }
 
+                    const rootNodeId = topicId ? `root-${topicId}` : 'root';
                     const rootNode: Node = {
-                        id: 'root',
+                        id: rootNodeId,
                         data: { label: rootLabel || '新しい疑問トピック', depth: 0 } as CustomNodeData,
                         position: { x: 400, y: 100 },
                         type: 'question',
@@ -318,8 +319,9 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
 
     const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
         if (lastClickedNodeId && lastClickedNodeId !== node.id) {
+            const rootNodeId = topicId ? `root-${topicId}` : 'root';
             // ルートノードの親は変更できない
-            if (node.id === 'root') {
+            if (node.id === rootNodeId) {
                 setLastClickedNodeId(node.id);
                 return;
             }
@@ -385,7 +387,8 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
 
         // 選択されているノードがあればそれを親とし、無ければ root に繋ぐ
         const selectedNode = nodes.find(n => n.selected);
-        const sourceId = selectedNode ? selectedNode.id : 'root';
+        const rootNodeId = topicId ? `root-${topicId}` : 'root';
+        const sourceId = selectedNode ? selectedNode.id : rootNodeId;
         const sourceNode = nodes.find(n => n.id === sourceId);
         const sourceDepth = (sourceNode?.data as CustomNodeData)?.depth || 0;
 
@@ -442,7 +445,8 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
 
     // ノード削除処理
     const handleDeleteNode = useCallback(async () => {
-        if (!lastClickedNodeId || lastClickedNodeId === 'root' || !topicId) return;
+        const rootNodeId = topicId ? `root-${topicId}` : 'root';
+        if (!lastClickedNodeId || lastClickedNodeId === rootNodeId || !topicId) return;
 
         // 子ノードを持っている場合は削除をブロック（ツリー構造の破壊を防ぐため）
         const hasChildren = edges.some(e => e.source === lastClickedNodeId);
@@ -467,9 +471,10 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
 
     }, [lastClickedNodeId, edges, topicId]);
 
+    const rootNodeId = topicId ? `root-${topicId}` : 'root';
     const isSelectedDeletable = Boolean(
         lastClickedNodeId &&
-        lastClickedNodeId !== 'root' &&
+        lastClickedNodeId !== rootNodeId &&
         createdNodeIds.includes(lastClickedNodeId)
     );
 
