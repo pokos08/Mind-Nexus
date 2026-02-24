@@ -79,15 +79,19 @@
 }
 
 .message-other .message-bubble {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(167, 139, 250, 0.15);
+    /* 淡いパープル背景 */
+    border: 1px solid rgba(167, 139, 250, 0.3);
     border-top-left-radius: 4px;
+    color: var(--text-color);
 }
 
 .message-me .message-bubble {
-    background: rgba(59, 130, 246, 0.2);
-    border: 1px solid rgba(59, 130, 246, 0.3);
+    background: rgba(56, 189, 248, 0.15);
+    /* 淡いブルー背景 */
+    border: 1px solid rgba(56, 189, 248, 0.3);
     border-top-right-radius: 4px;
+    color: var(--text-color);
 }
 
 .user-icon {

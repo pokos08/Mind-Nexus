@@ -19,6 +19,7 @@
     font-size: 2rem;
     background: linear-gradient(to right, #38bdf8, #818cf8);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 12px;
 }
@@ -125,9 +126,9 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 0 24px;
+    padding: 0 20px;
     background: var(--accent-color);
-    color: white;
+    color: var(--text-color);
     border: none;
     border-radius: 16px;
     font-size: 16px;
@@ -186,6 +187,19 @@
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     box-shadow: 0 8px 32px rgba(14, 165, 233, 0.05);
+    animation: topicPopIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes topicPopIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.9) translateY(10px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
 }
 
 .topic-card:hover {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BarChart3, X, Users, MessageSquareText, Eye, TrendingUp, TrendingDown } from 'lucide-react';
+import { BarChart3, X, Users, MessageSquareText, TrendingUp, TrendingDown } from 'lucide-react';
 import './AnalyticsPanel.css';
 
 interface AnalyticsPanelProps {
@@ -10,24 +10,67 @@ interface AnalyticsPanelProps {
 export const AnalyticsPanel = ({ isOpen, onClose }: AnalyticsPanelProps) => {
     if (!isOpen) return null;
 
-    // 初期モックデータ
+    // 初期データ
     const defaultData = {
-        liveViewers: { value: 0, trend: 'neutral', change: '-', label: '現在のアクティブユーザー' },
-        totalVisitors: { value: '0', trend: 'neutral', change: '-', label: '累計訪問者数 (今月)' },
-        totalComments: { value: '0', trend: 'neutral', change: '-', label: '総コメント数 (今週)' },
-        avgTimeOnSite: { value: '0m 0s', trend: 'neutral', change: '-', label: '平均滞在時間' },
+        totalTopics: { value: 0, trend: 'neutral', change: '-', label: '作成されたトピック数' },
+        totalVisitors: { value: '0', trend: 'neutral', change: '-', label: '累計アクセス数' },
+        totalComments: { value: '0', trend: 'neutral', change: '-', label: '総ユーザーコメント数' },
+        totalLikes: { value: '0', trend: 'neutral', change: '-', label: '獲得した総いいね数' },
     };
 
-    // localStorageからデータを取得するロジック
     const [analyticsData, setAnalyticsData] = useState(() => {
-        const savedData = localStorage.getItem('mindmap_analytics');
+        const savedData = localStorage.getItem('mindmap_analytics_real');
         return savedData ? JSON.parse(savedData) : defaultData;
     });
 
     // データ変更時にlocalStorageへ保存
     useEffect(() => {
-        localStorage.setItem('mindmap_analytics', JSON.stringify(analyticsData));
+        localStorage.setItem('mindmap_analytics_real', JSON.stringify(analyticsData));
     }, [analyticsData]);
+
+    // 実データをポーリングして集計する
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const updateData = () => {
+            try {
+                // TopicListからの実データを取得
+                const savedTopics = localStorage.getItem('mindmap_topics');
+                const topics: any[] = savedTopics ? JSON.parse(savedTopics) : [];
+
+                const totalTopics = topics.length;
+                const totalViews = topics.reduce((sum: number, t: any) => sum + (t.views || 0), 0);
+                const totalLikes = topics.reduce((sum: number, t: any) => sum + (t.likes || 0), 0);
+
+                // FreeChatからのコメント実数を集計（システムメッセージを除く）
+                let totalComments = 0;
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith('mindmap_free_chat_')) {
+                        const savedChat = localStorage.getItem(key);
+                        if (savedChat) {
+                            const messages: any[] = JSON.parse(savedChat);
+                            totalComments += messages.filter((m: any) => m.user !== 'システム').length;
+                        }
+                    }
+                }
+
+                setAnalyticsData({
+                    totalTopics: { value: totalTopics, trend: 'neutral', change: '-', label: '作成されたトピック数' },
+                    totalVisitors: { value: totalViews.toLocaleString(), trend: 'neutral', change: '-', label: '累計アクセス数' },
+                    totalComments: { value: totalComments.toLocaleString(), trend: 'neutral', change: '-', label: '総ユーザーコメント数' },
+                    totalLikes: { value: totalLikes.toLocaleString(), trend: 'neutral', change: '-', label: '獲得した総いいね数' },
+                });
+            } catch (error) {
+                console.error('Failed to parse analytics data:', error);
+            }
+        };
+
+        updateData();
+        const intervalId = setInterval(updateData, 3000); // パネルが開いている間は3秒おきに最新化
+
+        return () => clearInterval(intervalId);
+    }, [isOpen]);
 
     return (
         <div className="analytics-panel open">
@@ -45,18 +88,17 @@ export const AnalyticsPanel = ({ isOpen, onClose }: AnalyticsPanelProps) => {
                 <p className="analytics-subtitle">サイト全体の盛り上がりやユーザーの反応を確認できます。</p>
 
                 <div className="bento-grid">
-                    {/* Live Viewers Card */}
+                    {/* Total Topics Card */}
                     <div className="bento-card highlight-card">
                         <div className="card-header">
-                            <Eye size={18} className="card-icon" />
-                            <span>Live Viewers</span>
+                            <BarChart3 size={18} className="card-icon" />
+                            <span>Total Topics</span>
                         </div>
                         <div className="card-body">
-                            <span className="live-indicator"></span>
-                            <h2>{analyticsData.liveViewers.value}</h2>
+                            <h2>{analyticsData.totalTopics.value}</h2>
                         </div>
                         <div className="card-footer">
-                            <p className="description">{analyticsData.liveViewers.label}</p>
+                            <p className="description">{analyticsData.totalTopics.label}</p>
                         </div>
                     </div>
 
@@ -96,21 +138,17 @@ export const AnalyticsPanel = ({ isOpen, onClose }: AnalyticsPanelProps) => {
                         </div>
                     </div>
 
-                    {/* Avg Time Card (Span 2 columns if needed, or just normal card) */}
+                    {/* Total Likes Card */}
                     <div className="bento-card full-width">
                         <div className="card-header">
-                            <BarChart3 size={18} className="card-icon green-icon" />
-                            <span>Average Engagement</span>
+                            <TrendingUp size={18} className="card-icon green-icon" />
+                            <span>Total Likes</span>
                         </div>
                         <div className="card-body">
-                            <h2>{analyticsData.avgTimeOnSite.value}</h2>
+                            <h2>{analyticsData.totalLikes.value}</h2>
                         </div>
                         <div className="card-footer">
-                            <div className="trend-badge positive">
-                                <TrendingUp size={14} />
-                                <span>{analyticsData.avgTimeOnSite.change}</span>
-                            </div>
-                            <p className="description">{analyticsData.avgTimeOnSite.label}</p>
+                            <p className="description">{analyticsData.totalLikes.label}</p>
                         </div>
                     </div>
                 </div>

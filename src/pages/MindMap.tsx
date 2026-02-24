@@ -1,17 +1,19 @@
 import { useParams } from 'react-router-dom';
 import { MindMapBoard as MindMapComponent } from '../components/MindMapBoard';
-import { initialTopics } from '../data/topics';
+import { initialTopics, Topic } from '../data/topics';
 
 // App.tsx から MindMapBoard のラップを別ページに分離
 export function MindMap() {
     const { id } = useParams<{ id: string }>();
-    // 実際のアプリではここで id をもとにデータをフェッチしますが、今回はモックを使用
-    const topic = initialTopics.find((t) => t.id === id);
+
+    // localStorage から最新のトピック一覧を取得して検索する
+    const savedTopics = localStorage.getItem('mindmap_topics');
+    const topics: Topic[] = savedTopics ? JSON.parse(savedTopics) : initialTopics;
+    const topic = topics.find((t) => t.id === id);
 
     return (
         <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-            {/* 選択したトピックの情報を渡すことも可能ですが、ここでは元のMindMapBoardをそのまま表示します */}
-            <MindMapComponent initialTopicTitle={topic?.title} />
+            <MindMapComponent topicId={id} initialTopicTitle={topic?.title} />
         </div>
     );
 }

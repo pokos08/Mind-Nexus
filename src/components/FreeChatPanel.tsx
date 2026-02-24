@@ -16,15 +16,7 @@ type Message = {
     timestamp: string;
 };
 
-// モック用のダミーユーザー名とメッセージ
-const DUMMY_USERS = ['Alice', 'Bob', 'Charlie', 'Dave'];
-const DUMMY_MESSAGES = [
-    'それ面白い視点だね！',
-    'なるほど、深く考えさせられます。',
-    '私はこう思うんだけどどうかな？',
-    '次のノードに繋げてみよう。',
-    '参考になりました！'
-];
+// （不要となったモック用ダミーユーザーデータは削除しました）
 
 const INITIAL_MESSAGE: Message = {
     id: 'system-init',
@@ -38,7 +30,11 @@ export function FreeChatPanel({ isOpen, onClose, topicId }: FreeChatPanelProps) 
     const [messages, setMessages] = useState<Message[]>(() => {
         const storageKey = `mindmap_free_chat_${topicId || 'default'}`;
         const saved = localStorage.getItem(storageKey);
-        if (saved) return JSON.parse(saved);
+        if (saved) {
+            // ローカルストレージからも最大50件を読み込む
+            const parsed = JSON.parse(saved);
+            return parsed.slice(-50);
+        }
 
         return [{
             ...INITIAL_MESSAGE,
@@ -79,43 +75,25 @@ export function FreeChatPanel({ isOpen, onClose, topicId }: FreeChatPanelProps) 
         scrollToBottom();
     }, [messages, isOpen]);
 
-    // モック: ランダムに他ユーザーからメッセージが来るシミュレーション
-    useEffect(() => {
-        if (!isOpen) return;
-
-        const intervalId = setInterval(() => {
-            if (Math.random() > 0.7) { // 30%の確率で発言
-                const randomUser = DUMMY_USERS[Math.floor(Math.random() * DUMMY_USERS.length)];
-                const randomMsg = DUMMY_MESSAGES[Math.floor(Math.random() * DUMMY_MESSAGES.length)];
-
-                setMessages(prev => [...prev, {
-                    id: Date.now().toString(),
-                    user: randomUser,
-                    text: randomMsg,
-                    isMe: false,
-                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                }]);
-            }
-        }, 8000); // 8秒ごとにチェック
-
-        return () => clearInterval(intervalId);
-    }, [isOpen]);
-
+    // ユーザーからのメッセージなどを追加し、最大50件に制限
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!inputText.trim()) return;
 
-        // 自分のメッセージを追加
-        setMessages(prev => [
-            ...prev,
-            {
-                id: Date.now().toString(),
-                user: 'あなた',
-                text: inputText,
-                isMe: true,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            },
-        ]);
+        // 自分のメッセージを追加し、最大50件に保つ
+        setMessages(prev => {
+            const newMessages = [
+                ...prev,
+                {
+                    id: Date.now().toString(),
+                    user: 'あなた',
+                    text: inputText,
+                    isMe: true,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                },
+            ];
+            return newMessages.slice(-50);
+        });
         setInputText('');
     };
 

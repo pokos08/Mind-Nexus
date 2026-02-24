@@ -1,51 +1,164 @@
 .custom-node {
-    background: var(--glass-bg);
-    backdrop-filter: blur(16px);
-    border: 1px solid var(--glass-border);
-    border-radius: 12px;
-    padding: 12px 20px;
-    color: var(--text-color);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border-radius: 30px;
+    padding: 10px 24px;
+    color: white;
+    /* 塗りつぶしのため白文字ベースに変更 */
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
     font-size: 14px;
-    min-width: 150px;
-    transition: all 0.2s ease;
+    min-width: 140px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    animation: nodePopIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
-.custom-node::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, #60a5fa, #a78bfa);
-    opacity: 0.8;
+@keyframes nodePopIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.5) translateY(20px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
 }
 
-.custom-node.question-node {
-    border-left: 3px solid var(--accent-color);
+/* 階層ごとの塗りつぶしスタイル (Depth 0 = Root) */
+.custom-node.depth-0 {
+    background: #4f46e5;
+    /* 濃いめのインディゴ */
+    box-shadow: 0 10px 30px rgba(79, 70, 229, 0.3);
+    border: 3px solid rgba(255, 255, 255, 0.6);
+}
+
+.custom-node.depth-0 .node-icon {
+    color: white;
+}
+
+.custom-node.depth-0 .node-label {
+    font-weight: 700;
+    font-size: 16px;
+}
+
+/* Depth 1: ブルー系 */
+.custom-node.depth-1 {
+    background: #3b82f6;
+}
+
+.custom-node.depth-1 .node-icon {
+    color: white;
+}
+
+/* Depth 2: シアン・ティール系 */
+.custom-node.depth-2 {
+    background: #06b6d4;
+}
+
+.custom-node.depth-2 .node-icon {
+    color: white;
+}
+
+/* Depth 3: エメラルドグリーン系 */
+.custom-node.depth-3 {
+    background: #10b981;
+}
+
+.custom-node.depth-3 .node-icon {
+    color: white;
+}
+
+/* Depth 4: グリーン系 */
+.custom-node.depth-4 {
+    background: #22c55e;
+}
+
+.custom-node.depth-4 .node-icon {
+    color: white;
+}
+
+/* Depth 5: イエローグリーン系 */
+.custom-node.depth-5 {
+    background: #84cc16;
+    color: #1e293b;
+}
+
+.custom-node.depth-5 .node-icon {
+    color: #1e293b;
+}
+
+/* Depth 6: イエロー・アンバー系 */
+.custom-node.depth-6 {
+    background: #f59e0b;
+}
+
+.custom-node.depth-6 .node-icon {
+    color: white;
+}
+
+/* Depth 7: オレンジ系 */
+.custom-node.depth-7 {
+    background: #f97316;
+}
+
+.custom-node.depth-7 .node-icon {
+    color: white;
+}
+
+/* Depth 8: ローズレッド系 */
+.custom-node.depth-8 {
+    background: #f43f5e;
+}
+
+.custom-node.depth-8 .node-icon {
+    color: white;
+}
+
+/* Depth 9: ピンク系 */
+.custom-node.depth-9 {
+    background: #ec4899;
+}
+
+.custom-node.depth-9 .node-icon {
+    color: white;
+}
+
+/* Depth 10 以上: パープル系 */
+.custom-node.depth-10 {
+    background: #a855f7;
+}
+
+.custom-node.depth-10 .node-icon {
+    color: white;
+}
+
+/* 選択中のノード (繋ぎ直しや子追加の起点) */
+.custom-node.is-selected {
+    box-shadow: 0 0 0 4px white, 0 0 0 8px rgba(255, 255, 255, 0.3), 0 12px 40px rgba(0, 0, 0, 0.4);
+    border-color: white;
+    transform: translateY(-4px) !important;
+    z-index: 10;
 }
 
 .custom-node:hover {
     transform: translateY(-2px);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.3);
+    border-color: rgba(255, 255, 255, 0.8);
 }
 
 .node-content {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    justify-content: center;
 }
 
 .node-icon {
-    color: var(--accent-color);
     flex-shrink: 0;
 }
 
 .node-label {
-    font-weight: 500;
-    letter-spacing: 0.2px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
 }
