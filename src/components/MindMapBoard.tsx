@@ -33,7 +33,7 @@ type CustomNodeData = {
 };
 
 // d3-hierarchyを用いた放射状（Radial）レイアウト関数
-const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
+const getLayoutedElements = (nodes: Node[], edges: Edge[], rootNodeId: string) => {
     if (nodes.length === 0) return { nodes, edges };
 
     // edges から親子の階層構造マップを作成
@@ -55,7 +55,13 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
     };
 
     // データフローの中央にあるべき「root」ノードを探す
-    const rootNodeData = buildHierarchy('root');
+    const rootNodeData = buildHierarchy(rootNodeId);
+
+    // もしルートノードデータが正常に取得できなかった場合の安全対策
+    if (!rootNodeData || !childrenMap[rootNodeId]) {
+        return { nodes, edges };
+    }
+
     const root = d3.hierarchy(rootNodeData);
 
     // 半径の計算：1階層（depth）ごとの距離を設定
@@ -100,7 +106,7 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
 };
 
 // 全ノードの深さを再計算する関数（ルート起点でBFS）
-const calculateDepths = (nodes: Node[], edges: Edge[]): Node[] => {
+const calculateDepths = (nodes: Node[], edges: Edge[], rootNodeId: string): Node[] => {
     const adjacencyList: Record<string, string[]> = {};
     nodes.forEach(n => adjacencyList[n.id] = []);
     edges.forEach(e => {
@@ -108,11 +114,11 @@ const calculateDepths = (nodes: Node[], edges: Edge[]): Node[] => {
     });
 
     const newNodes = [...nodes];
-    const queue = [{ id: 'root', depth: 0 }];
-    const visited = new Set(['root']);
+    const queue = [{ id: rootNodeId, depth: 0 }];
+    const visited = new Set([rootNodeId]);
 
     // rootノードの深さを0に初期化
-    const rootIndex = newNodes.findIndex(n => n.id === 'root');
+    const rootIndex = newNodes.findIndex(n => n.id === rootNodeId);
     if (rootIndex !== -1) {
         newNodes[rootIndex] = { ...newNodes[rootIndex], data: { ...newNodes[rootIndex].data, depth: 0 } };
     }
@@ -218,9 +224,11 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
                     setCreatedNodeIds(prev => Array.from(new Set([...prev, rootNode.id])));
                 }
 
+                const rootNodeId = topicId ? `root-${topicId}` : 'root';
+
                 // 初期配置もレイアウト適用
-                const depthUpdatedNodes = calculateDepths(formattedNodes, formattedEdges);
-                const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(depthUpdatedNodes, formattedEdges);
+                const depthUpdatedNodes = calculateDepths(formattedNodes, formattedEdges, rootNodeId);
+                const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(depthUpdatedNodes, formattedEdges, rootNodeId);
 
                 setNodes(layoutedNodes);
                 setEdges(layoutedEdges);
@@ -337,8 +345,8 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
                 const newEdges = [...filteredEdges, newEdge];
 
                 setNodes(nds => {
-                    const depthUpdatedNodes = calculateDepths(nds, newEdges);
-                    const { nodes: layoutedNodes } = getLayoutedElements(depthUpdatedNodes, newEdges);
+                    const depthUpdatedNodes = calculateDepths(nds, newEdges, rootNodeId);
+                    const { nodes: layoutedNodes } = getLayoutedElements(depthUpdatedNodes, newEdges, rootNodeId);
                     setTimeout(() => fitView({ duration: 800 }), 100);
                     return layoutedNodes;
                 });
@@ -372,13 +380,14 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
     // ノードがドラッグ等で接続されたときに階層（depth）を再計算する (今回はAddNodePanel中心なので予備)
     const onConnect = useCallback(
         (params: Connection) => {
+            const rootNodeId = topicId ? `root-${topicId}` : 'root';
             setEdges((eds) => {
                 const newEdges = addEdge(params, eds);
-                setNodes(nds => calculateDepths(nds, newEdges));
+                setNodes(nds => calculateDepths(nds, newEdges, rootNodeId));
                 return newEdges;
             });
         },
-        []
+        [topicId]
     );
 
     // 新規ノードの追加
@@ -410,7 +419,7 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
             const updatedNodes = [...nds, newNode];
             setEdges((eds) => {
                 const updatedEdges = [...eds, newEdge];
-                const { edges: layoutedEdges } = getLayoutedElements(updatedNodes, updatedEdges);
+                const { edges: layoutedEdges } = getLayoutedElements(updatedNodes, updatedEdges, rootNodeId);
 
                 // DBへの保存処理
                 if (topicId) {
@@ -437,8 +446,8 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
                 setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
                 return layoutedEdges;
             });
-            const depthUpdatedNodes = calculateDepths(updatedNodes, [...edges, newEdge]);
-            const { nodes: layoutedNodes } = getLayoutedElements(depthUpdatedNodes, [...edges, newEdge]);
+            const depthUpdatedNodes = calculateDepths(updatedNodes, [...edges, newEdge], rootNodeId);
+            const { nodes: layoutedNodes } = getLayoutedElements(depthUpdatedNodes, [...edges, newEdge], rootNodeId);
             return layoutedNodes;
         });
     }, [nodes, edges, fitView, topicId]);
