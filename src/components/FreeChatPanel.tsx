@@ -130,9 +130,9 @@ export function FreeChatPanel({ isOpen, onClose, topicId }: FreeChatPanelProps) 
         const textToSave = inputText;
         setInputText(''); // UIをすぐにクリア
 
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(topicId);
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(topicId);
         if (!isUuid) {
-            alert('初期データではチャットのDB保存ができません。新しいトピックを作成してください。');
+            alert('初期表示のデータではチャットの保存ができません。新しいトピックを作成してください。');
             return;
         }
 
