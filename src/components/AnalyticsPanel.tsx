@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BarChart3, X, Users, MessageSquareText, TrendingUp, TrendingDown } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import './AnalyticsPanel.css';
 
 interface AnalyticsPanelProps {
@@ -32,28 +33,27 @@ export const AnalyticsPanel = ({ isOpen, onClose }: AnalyticsPanelProps) => {
     useEffect(() => {
         if (!isOpen) return;
 
-        const updateData = () => {
+        const updateData = async () => {
             try {
-                // TopicListからの実データを取得
-                const savedTopics = localStorage.getItem('mindmap_topics');
-                const topics: any[] = savedTopics ? JSON.parse(savedTopics) : [];
+                // TopicListの実データをDBから取得
+                const { data: topics, error: topicsError } = await supabase.from('topics').select('views, likes');
 
-                const totalTopics = topics.length;
-                const totalViews = topics.reduce((sum: number, t: any) => sum + (t.views || 0), 0);
-                const totalLikes = topics.reduce((sum: number, t: any) => sum + (t.likes || 0), 0);
+                let totalTopics = 0;
+                let totalViews = 0;
+                let totalLikes = 0;
 
-                // FreeChatからのコメント実数を集計（システムメッセージを除く）
-                let totalComments = 0;
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key && key.startsWith('mindmap_free_chat_')) {
-                        const savedChat = localStorage.getItem(key);
-                        if (savedChat) {
-                            const messages: any[] = JSON.parse(savedChat);
-                            totalComments += messages.filter((m: any) => m.user !== 'システム').length;
-                        }
-                    }
+                if (!topicsError && topics) {
+                    totalTopics = topics.length;
+                    totalViews = topics.reduce((sum: number, t: any) => sum + (t.views || 0), 0);
+                    totalLikes = topics.reduce((sum: number, t: any) => sum + (t.likes || 0), 0);
                 }
+
+                // チャットのメッセージ件数をDBから取得（システムメッセージは記録しない前提）
+                const { count: commentsCount, error: commentsError } = await supabase
+                    .from('chat_messages')
+                    .select('*', { count: 'exact', head: true });
+
+                const totalComments = commentsError ? 0 : (commentsCount || 0);
 
                 setAnalyticsData({
                     totalTopics: { value: totalTopics, trend: 'neutral', change: '-', label: '作成されたトピック数' },
@@ -67,7 +67,7 @@ export const AnalyticsPanel = ({ isOpen, onClose }: AnalyticsPanelProps) => {
         };
 
         updateData();
-        const intervalId = setInterval(updateData, 3000); // パネルが開いている間は3秒おきに最新化
+        const intervalId = setInterval(updateData, 10000); // サーバー負荷軽減のため10秒おきに最新化
 
         return () => clearInterval(intervalId);
     }, [isOpen]);

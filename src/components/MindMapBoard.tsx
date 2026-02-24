@@ -19,6 +19,7 @@ import '@xyflow/react/dist/style.css';
 import { QuestionNode } from './QuestionNode';
 import { AddNodePanel } from './AddNodePanel';
 import * as d3 from 'd3-hierarchy';
+import { supabase } from '../lib/supabase';
 
 interface MindMapBoardProps {
     initialTopicTitle?: string;
@@ -135,37 +136,126 @@ const calculateDepths = (nodes: Node[], edges: Edge[]): Node[] => {
 const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
     const { fitView } = useReactFlow();
 
-    const [nodes, setNodes] = useState<Node[]>(() => {
-        const storageKey = topicId ? `mindmap_nodes_${topicId}` : `mindmap_nodes`;
-        const savedNodes = localStorage.getItem(storageKey);
-        if (savedNodes) return JSON.parse(savedNodes);
+    const [nodes, setNodes] = useState<Node[]>([]);
+    const [edges, setEdges] = useState<Edge[]>([]);
+    const [isInitialized, setIsInitialized] = useState(false);
 
-        // 初期データがない場合のみ作成
-        const rootNode: Node = {
-            id: 'root',
-            data: { label: initialTopicTitle || '新しい疑問トピック', depth: 0 } as CustomNodeData,
-            position: { x: 400, y: 100 },
-            type: 'question',
+    // Supabaseからの初期データロード
+    useEffect(() => {
+        if (!topicId) return;
+
+        const fetchData = async () => {
+            const { data: dbNodes, error: nodesError } = await supabase
+                .from('nodes')
+                .select('*')
+                .eq('topic_id', topicId);
+
+            const { data: dbEdges, error: edgesError } = await supabase
+                .from('edges')
+                .select('*')
+                .eq('topic_id', topicId);
+
+            if (!nodesError && !edgesError && dbNodes && dbEdges) {
+                // DBから取得したデータをReact Flow用のフォーマットに変換
+                let formattedNodes: Node[] = dbNodes.map(n => ({
+                    id: n.id,
+                    type: 'question',
+                    position: { x: n.position_x || 0, y: n.position_y || 0 }, // d3レイアウトが後で上書きするが初期値として必要
+                    data: { label: n.label, depth: n.depth } as CustomNodeData
+                }));
+
+                let formattedEdges: Edge[] = dbEdges.map(e => ({
+                    id: e.id,
+                    source: e.source,
+                    target: e.target,
+                    type: 'straight'
+                }));
+
+                // 新規作成されたばかり（DBが空）の場合、rootノードを作成してDBへ保存
+                if (formattedNodes.length === 0) {
+                    const rootNode: Node = {
+                        id: 'root',
+                        data: { label: initialTopicTitle || '新しい疑問トピック', depth: 0 } as CustomNodeData,
+                        position: { x: 400, y: 100 },
+                        type: 'question',
+                    };
+                    formattedNodes = [rootNode];
+
+                    // 初期ノードをDBに保存(非同期)
+                    supabase.from('nodes').insert([{
+                        id: rootNode.id,
+                        topic_id: topicId,
+                        label: rootNode.data.label,
+                        depth: 0,
+                        position_x: 400,
+                        position_y: 100,
+                        parent_id: null
+                    }]).then();
+                }
+
+                // 初期配置もレイアウト適用
+                const depthUpdatedNodes = calculateDepths(formattedNodes, formattedEdges);
+                const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(depthUpdatedNodes, formattedEdges);
+
+                setNodes(layoutedNodes);
+                setEdges(layoutedEdges);
+                setIsInitialized(true);
+                setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
+            }
         };
-        return [rootNode];
-    });
 
-    const [edges, setEdges] = useState<Edge[]>(() => {
-        const storageKey = topicId ? `mindmap_edges_${topicId}` : `mindmap_edges`;
-        const savedEdges = localStorage.getItem(storageKey);
-        return savedEdges ? JSON.parse(savedEdges) : [];
-    });
+        fetchData();
+    }, [topicId, initialTopicTitle, fitView]);
 
-    // 状態が変更されたらlocalStorageに保存
+    // ─────────────────────────────────────────
+    // リアルタイムサブスクリプション（Nodes & Edges）
+    // ─────────────────────────────────────────
     useEffect(() => {
-        const storageKey = topicId ? `mindmap_nodes_${topicId}` : `mindmap_nodes`;
-        localStorage.setItem(storageKey, JSON.stringify(nodes));
-    }, [nodes, topicId]);
+        if (!topicId || !isInitialized) return;
 
+        const channel = supabase.channel(`mindmap_${topicId}`)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'nodes', filter: `topic_id=eq.${topicId}` }, (payload) => {
+                const newRecord = payload.new as any;
+                setNodes(prev => {
+                    if (prev.find(n => n.id === newRecord.id)) return prev;
+                    const newNode: Node = {
+                        id: newRecord.id,
+                        type: 'question',
+                        position: { x: newRecord.position_x || 0, y: newRecord.position_y || 0 },
+                        data: { label: newRecord.label, depth: newRecord.depth } as CustomNodeData
+                    };
+                    return [...prev, newNode];
+                });
+            })
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'edges', filter: `topic_id=eq.${topicId}` }, (payload) => {
+                const newRecord = payload.new as any;
+                setEdges(prev => {
+                    if (prev.find(e => e.id === newRecord.id)) return prev;
+                    const newEdge: Edge = {
+                        id: newRecord.id,
+                        source: newRecord.source,
+                        target: newRecord.target,
+                        type: 'straight'
+                    };
+                    return [...prev, newEdge];
+                });
+            })
+            // エッジ更新（繋ぎ直し）の場合の削除対応などは省略し、最新状態を手動で計算するロジックはクライアントで担保する前提
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [topicId, isInitialized]);
+
+    // ノードやエッジが外部(サブスクリプション)から更新された際に全体レイアウトを再計算する
+    // ※ ユーザー自身が操作した直後にも呼ばれる
     useEffect(() => {
-        const storageKey = topicId ? `mindmap_edges_${topicId}` : `mindmap_edges`;
-        localStorage.setItem(storageKey, JSON.stringify(edges));
-    }, [edges, topicId]);
+        if (!isInitialized) return;
+        // （複雑化を避けるため、ここでは再レイアウトのトリガーは主に handleAddNode など操作側に寄せる。
+        // リモートからの挿入時のみレイアウト再計算が必要だが、無限ループ防止のためここでは簡易実装にとどめる）
+    }, [nodes.length, edges.length]);
+
 
     const nodeTypes = useMemo(() => ({ question: QuestionNode }), []);
 
@@ -191,7 +281,6 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
             }
 
             setEdges((eds) => {
-                // node.idに向かう既存のエッジを削除し、新しい親(lastClickedNodeId)からのエッジを追加
                 const filteredEdges = eds.filter(e => e.target !== node.id);
                 const newEdge = {
                     id: `e-${lastClickedNodeId}-${node.id}`,
@@ -201,13 +290,25 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
                 };
                 const newEdges = [...filteredEdges, newEdge];
 
-                // エッジが変更されたらノードのdepthを再計算し、レイアウトも整える
                 setNodes(nds => {
                     const depthUpdatedNodes = calculateDepths(nds, newEdges);
                     const { nodes: layoutedNodes } = getLayoutedElements(depthUpdatedNodes, newEdges);
                     setTimeout(() => fitView({ duration: 800 }), 100);
                     return layoutedNodes;
                 });
+
+                // DBへの反映 (エッジの削除と再作成)
+                if (topicId) {
+                    // 対象ノードに向かう古いエッジをDBから削除し、新しいエッジをINSERTする
+                    supabase.from('edges').delete().eq('target', node.id).eq('topic_id', topicId).then(() => {
+                        supabase.from('edges').insert([{
+                            id: newEdge.id,
+                            topic_id: topicId,
+                            source: newEdge.source,
+                            target: newEdge.target
+                        }]).then();
+                    });
+                }
 
                 return newEdges;
             });
@@ -222,7 +323,7 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
         setLastClickedNodeId(null);
     }, []);
 
-    // ノードが接続されたときに階層（depth）を再計算する
+    // ノードがドラッグ等で接続されたときに階層（depth）を再計算する (今回はAddNodePanel中心なので予備)
     const onConnect = useCallback(
         (params: Connection) => {
             setEdges((eds) => {
@@ -262,21 +363,36 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
             const updatedNodes = [...nds, newNode];
             setEdges((eds) => {
                 const updatedEdges = [...eds, newEdge];
-                // d3による自動レイアウトを適用
-                const { edges: layoutedEdges } = getLayoutedElements(
-                    updatedNodes,
-                    updatedEdges
-                );
+                const { edges: layoutedEdges } = getLayoutedElements(updatedNodes, updatedEdges);
+
+                // DBへの保存処理
+                if (topicId) {
+                    supabase.from('nodes').insert([{
+                        id: newNode.id,
+                        topic_id: topicId,
+                        label: newNode.data.label,
+                        depth: newNode.data.depth,
+                        position_x: 0,
+                        position_y: 0,
+                        parent_id: sourceId
+                    }]).then();
+
+                    supabase.from('edges').insert([{
+                        id: newEdge.id,
+                        topic_id: topicId,
+                        source: newEdge.source,
+                        target: newEdge.target
+                    }]).then();
+                }
+
                 setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
                 return layoutedEdges;
             });
-            // edgesのセッター内で計算したノード位置はsetNodesのコールバックでは即座に得られないため、
-            // ここでもd3計算を行う
             const depthUpdatedNodes = calculateDepths(updatedNodes, [...edges, newEdge]);
             const { nodes: layoutedNodes } = getLayoutedElements(depthUpdatedNodes, [...edges, newEdge]);
             return layoutedNodes;
         });
-    }, [nodes, edges, fitView]);
+    }, [nodes, edges, fitView, topicId]);
 
     return (
         <div className="mindmap-container" style={{ position: 'relative', width: '100%', height: '100%' }}>

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Send, User } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import './FreeChatPanel.css'; // AIChatPanelのCSSをベースに一部拡張
 
 interface FreeChatPanelProps {
@@ -27,45 +28,74 @@ const INITIAL_MESSAGE: Message = {
 };
 
 export function FreeChatPanel({ isOpen, onClose, topicId }: FreeChatPanelProps) {
-    const [messages, setMessages] = useState<Message[]>(() => {
-        const storageKey = `mindmap_free_chat_${topicId || 'default'}`;
-        const saved = localStorage.getItem(storageKey);
-        if (saved) {
-            // ローカルストレージからも最大50件を読み込む
-            const parsed = JSON.parse(saved);
-            return parsed.slice(-50);
-        }
-
-        return [{
-            ...INITIAL_MESSAGE,
-            id: `system-init-${topicId || 'default'}`,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }];
-    });
-
+    const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // トピックが切り替わったらlocalStorageから履歴を再取得。無ければ初期化。
+    // DBからの初期データロード
     useEffect(() => {
-        const storageKey = `mindmap_free_chat_${topicId || 'default'}`;
-        const saved = localStorage.getItem(storageKey);
-        if (saved) {
-            setMessages(JSON.parse(saved));
-        } else {
-            setMessages([{
-                ...INITIAL_MESSAGE,
-                id: `system-init-${topicId || 'default'}`,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            }]);
-        }
+        if (!topicId) return;
+
+        const fetchMessages = async () => {
+            const { data, error } = await supabase
+                .from('chat_messages')
+                .select('*')
+                .eq('topic_id', topicId)
+                .order('created_at', { ascending: false }) // 最新から取得
+                .limit(50); // 最大50件
+
+            if (!error && data) {
+                const formattedMessages: Message[] = data.reverse().map(m => ({ // 昇順に戻す
+                    id: m.id,
+                    user: m.author,
+                    text: m.text,
+                    isMe: m.author === 'あなた', // 簡易的な自分判定（今回は名前ベースのモック）
+                    timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                }));
+
+                // 初期案内メッセージを先頭に付与
+                setMessages([
+                    {
+                        ...INITIAL_MESSAGE,
+                        id: `system-init-${topicId}`,
+                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    },
+                    ...formattedMessages
+                ]);
+            }
+        };
+
+        fetchMessages();
     }, [topicId]);
 
-    // messagesが更新されるたびにlocalStorageへ保存
+    // リアルタイムサブスクリプション（他人のメッセージ受信）
     useEffect(() => {
-        const storageKey = `mindmap_free_chat_${topicId || 'default'}`;
-        localStorage.setItem(storageKey, JSON.stringify(messages));
-    }, [messages, topicId]);
+        if (!topicId) return;
+
+        const channel = supabase.channel(`chat_${topicId}`)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `topic_id=eq.${topicId}` }, (payload) => {
+                const newRecord = payload.new as any;
+                const newMsg: Message = {
+                    id: newRecord.id,
+                    user: newRecord.author,
+                    text: newRecord.text,
+                    isMe: newRecord.author === 'あなた', // 簡易判定
+                    timestamp: new Date(newRecord.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                };
+
+                setMessages(prev => {
+                    if (prev.find(m => m.id === newMsg.id)) return prev;
+                    const newMessages = [...prev, newMsg];
+                    // Systemメッセージ(+1)を含むため最大51件
+                    return newMessages.length > 51 ? newMessages.slice(newMessages.length - 51) : newMessages;
+                });
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [topicId]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -75,26 +105,20 @@ export function FreeChatPanel({ isOpen, onClose, topicId }: FreeChatPanelProps) 
         scrollToBottom();
     }, [messages, isOpen]);
 
-    // ユーザーからのメッセージなどを追加し、最大50件に制限
-    const handleSubmit = (e: React.FormEvent) => {
+    // ユーザーからのメッセージなどを追加しDBへ保存（最大50件）
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!inputText.trim()) return;
+        if (!inputText.trim() || !topicId) return;
 
-        // 自分のメッセージを追加し、最大50件に保つ
-        setMessages(prev => {
-            const newMessages = [
-                ...prev,
-                {
-                    id: Date.now().toString(),
-                    user: 'あなた',
-                    text: inputText,
-                    isMe: true,
-                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                },
-            ];
-            return newMessages.slice(-50);
-        });
-        setInputText('');
+        const textToSave = inputText;
+        setInputText(''); // UIをすぐにクリア
+
+        // Supabaseへ保存（RealtimeのINSERT通知が返ってきて表示される）
+        await supabase.from('chat_messages').insert([{
+            topic_id: topicId,
+            author: 'あなた', // 簡易的なユーザー名
+            text: textToSave
+        }]);
     };
 
     if (!isOpen) return null;

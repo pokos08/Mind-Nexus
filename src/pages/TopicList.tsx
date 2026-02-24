@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Flame, Clock, Heart, Plus, Eye } from 'lucide-react';
 import { initialTopics, Topic } from '../data/topics';
+import { supabase } from '../lib/supabase';
 import './TopicList.css';
 
 type SortType = 'latest' | 'popular' | 'views';
@@ -9,30 +10,94 @@ type SortType = 'latest' | 'popular' | 'views';
 export function TopicList() {
     const navigate = useNavigate();
 
-    // localStorageから初期データを取得するロジック
-    const [topics, setTopics] = useState<Topic[]>(() => {
-        const savedTopics = localStorage.getItem('mindmap_topics');
-        return savedTopics ? JSON.parse(savedTopics) : initialTopics;
-    });
+    const [topics, setTopics] = useState<Topic[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [sortType, setSortType] = useState<SortType>('latest');
     const [newTopicTitle, setNewTopicTitle] = useState('');
 
-    // localStorageから「いいね」履歴を取得
+    // localStorageから「いいね」履歴（自分がいいねしたかどうかのローカル記録）を取得
     const [userLikes, setUserLikes] = useState<Record<string, number>>(() => {
         const savedLikes = localStorage.getItem('mindmap_userLikes');
         return savedLikes ? JSON.parse(savedLikes) : {};
     });
 
-    // 状態が変更されるたびにlocalStorageへ保存
-    useEffect(() => {
-        localStorage.setItem('mindmap_topics', JSON.stringify(topics));
-    }, [topics]);
-
     useEffect(() => {
         localStorage.setItem('mindmap_userLikes', JSON.stringify(userLikes));
     }, [userLikes]);
+
+    // Supabaseからの初期データロード
+    useEffect(() => {
+        const fetchTopics = async () => {
+            const { data, error } = await supabase
+                .from('topics')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error('Error fetching topics:', error);
+                // エラー時はフォールバックとして初期データをセット
+                setTopics(initialTopics);
+            } else if (data) {
+                // スネークケースからキャメルケースへの変換
+                const formattedTopics = data.map(t => ({
+                    id: t.id,
+                    title: t.title,
+                    createdAt: t.created_at,
+                    views: t.views,
+                    likes: t.likes,
+                }));
+                // もしテーブルが空なら初期データを表示用として一応セットする（DBには入れない）
+                setTopics(formattedTopics.length > 0 ? formattedTopics : initialTopics);
+            }
+            setIsLoading(false);
+        };
+
+        fetchTopics();
+    }, []);
+
+    // リアルタイムサブスクリプション（他の人が追加・いいねした時の自動更新）
+    useEffect(() => {
+        const channel = supabase
+            .channel('topics_channel')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'topics' },
+                (payload) => {
+                    const newRecord = payload.new as any;
+                    if (payload.eventType === 'INSERT') {
+                        const newTopic: Topic = {
+                            id: newRecord.id,
+                            title: newRecord.title,
+                            createdAt: newRecord.created_at,
+                            views: newRecord.views,
+                            likes: newRecord.likes,
+                        };
+                        setTopics(prev => {
+                            // 既に存在するかチェック（自分が追加したものは重複しないように）
+                            if (prev.find(t => t.id === newTopic.id)) return prev;
+                            // フォールバックのinitialTopicsしかない場合は置換、そうでない場合は先頭に追加
+                            if (prev === initialTopics && newTopic.id !== '1' && newTopic.id !== '2') {
+                                return [newTopic];
+                            }
+                            return [newTopic, ...prev];
+                        });
+                    } else if (payload.eventType === 'UPDATE') {
+                        setTopics(prev => prev.map(t =>
+                            t.id === newRecord.id
+                                ? { ...t, likes: newRecord.likes, views: newRecord.views }
+                                : t
+                        ));
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
 
     // 検索とソートロジック
     const filteredAndSortedTopics = useMemo(() => {
@@ -61,45 +126,69 @@ export function TopicList() {
         setVisibleCount(5);
     }, [searchQuery, sortType]);
 
-    const handleCreateTopic = (e: React.FormEvent) => {
+    const handleCreateTopic = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newTopicTitle.trim()) return;
 
-        const newTopic: Topic = {
-            id: Date.now().toString(),
-            title: newTopicTitle.trim(),
-            createdAt: new Date().toISOString(),
-            views: 0,
-            likes: 0,
-        };
+        const titleToSave = newTopicTitle.trim();
+        setNewTopicTitle(''); // UIをすぐにクリア
 
-        setTopics([newTopic, ...topics]);
-        setNewTopicTitle('');
+        const { data, error } = await supabase
+            .from('topics')
+            .insert([{ title: titleToSave }])
+            .select();
+
+        if (error) {
+            console.error('Error creating topic:', error);
+            alert('トピックの作成に失敗しました');
+        } else if (data && data[0]) {
+            // INSERT の Realtime サブスクリプションが動くのでここでの手動setTopicsは不要だが、
+            // レスポンス速度のためオプティミスティックUIとして手動で追加してもよい。
+            // 今回はRealtimeで降ってくるのを待つ（必要に応じて即時反映を記述）
+        }
     };
 
-    const handleToggleLike = (topicId: string, e: React.MouseEvent) => {
+    const handleToggleLike = async (topicId: string, e: React.MouseEvent) => {
         e.stopPropagation(); // パネルのクリックイベント（遷移）を親に伝播させない
 
-        // 現在のユーザーのいいね回数を確認（最大10回）
+        // 現在のユーザーのローカルいいね回数を確認（最大10回）
         const currentLikes = userLikes[topicId] || 0;
         if (currentLikes >= 10) return;
 
+        // フォールバック初期データなどはUUIDではない可能性がありDB更新できないため弾く
+        if (!topicId.includes('-')) return;
+
         setUserLikes(prev => ({ ...prev, [topicId]: currentLikes + 1 }));
 
-        setTopics((prev) =>
-            prev.map((t) =>
-                t.id === topicId ? { ...t, likes: t.likes + 1 } : t
-            )
-        );
+        // 対象のトピックを現状のstateから探す
+        const targetTopic = topics.find(t => t.id === topicId);
+        if (targetTopic) {
+            const newLikesCount = targetTopic.likes + 1;
+            // オプティミスティック更新
+            setTopics((prev) => prev.map((t) => t.id === topicId ? { ...t, likes: newLikesCount } : t));
+
+            // Supabaseを更新
+            await supabase.from('topics').update({ likes: newLikesCount }).eq('id', topicId);
+        }
     };
 
-    const handleTopicClick = (topicId: string) => {
-        // アクセス数を増やして画面遷移
-        setTopics((prev) =>
-            prev.map((t) =>
-                t.id === topicId ? { ...t, views: t.views + 1 } : t
-            )
-        );
+    const handleTopicClick = async (topicId: string) => {
+        // フォールバック初期データの遷移
+        if (!topicId.includes('-')) {
+            navigate(`/map/${topicId}`);
+            return;
+        }
+
+        const targetTopic = topics.find(t => t.id === topicId);
+        if (targetTopic) {
+            // アクセス数を増やす
+            const newViewsCount = targetTopic.views + 1;
+            setTopics((prev) => prev.map((t) => t.id === topicId ? { ...t, views: newViewsCount } : t));
+
+            // Supabaseのviewsを更新（※遷移を優先し await せずに裏で投げる）
+            supabase.from('topics').update({ views: newViewsCount }).eq('id', topicId);
+        }
+
         navigate(`/map/${topicId}`);
     };
 
@@ -159,43 +248,47 @@ export function TopicList() {
             </form>
 
             <div className="scrollable-list-wrapper">
-                <div className="topic-grid">
-                    {displayedTopics.map((topic) => {
-                        const isMaxLikes = (userLikes[topic.id] || 0) >= 10;
-                        return (
-                            <div
-                                key={topic.id}
-                                className="topic-card"
-                                onClick={() => handleTopicClick(topic.id)}
-                            >
-                                <div className="topic-card-content">
-                                    <h3>{topic.title}</h3>
-                                    <div className="topic-meta">
-                                        <span className="meta-item">
-                                            <Eye size={14} /> {topic.views.toLocaleString()}
-                                        </span>
-                                        <span className="meta-item">
-                                            <Clock size={14} /> {new Date(topic.createdAt).toLocaleDateString()}
-                                        </span>
-                                    </div>
-                                </div>
-                                <button
-                                    className={`like-btn ${isMaxLikes ? 'maxed' : ''}`}
-                                    onClick={(e) => handleToggleLike(topic.id, e)}
-                                    title={isMaxLikes ? "いいね上限(10回)に達しました" : "いいね！(最大10回)"}
-                                    disabled={isMaxLikes}
-                                    style={{ opacity: isMaxLikes ? 0.7 : 1, cursor: isMaxLikes ? 'default' : 'pointer' }}
+                {isLoading ? (
+                    <div className="no-results">読み込み中...</div>
+                ) : (
+                    <div className="topic-grid">
+                        {displayedTopics.map((topic) => {
+                            const isMaxLikes = (userLikes[topic.id] || 0) >= 10;
+                            return (
+                                <div
+                                    key={topic.id}
+                                    className="topic-card"
+                                    onClick={() => handleTopicClick(topic.id)}
                                 >
-                                    <Heart size={18} className="heart-icon" style={{ fill: isMaxLikes ? '#f43f5e' : 'none' }} />
-                                    <span>{isMaxLikes ? 'MAX' : topic.likes}</span>
-                                </button>
-                            </div>
-                        );
-                    })}
-                    {filteredAndSortedTopics.length === 0 && (
-                        <div className="no-results">条件に一致するトピックが見つかりません。</div>
-                    )}
-                </div>
+                                    <div className="topic-card-content">
+                                        <h3>{topic.title}</h3>
+                                        <div className="topic-meta">
+                                            <span className="meta-item">
+                                                <Eye size={14} /> {topic.views.toLocaleString()}
+                                            </span>
+                                            <span className="meta-item">
+                                                <Clock size={14} /> {new Date(topic.createdAt).toLocaleDateString()}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        className={`like-btn ${isMaxLikes ? 'maxed' : ''}`}
+                                        onClick={(e) => handleToggleLike(topic.id, e)}
+                                        title={isMaxLikes ? "いいね上限(10回)に達しました" : "いいね！(最大10回)"}
+                                        disabled={isMaxLikes}
+                                        style={{ opacity: isMaxLikes ? 0.7 : 1, cursor: isMaxLikes ? 'default' : 'pointer' }}
+                                    >
+                                        <Heart size={18} className="heart-icon" style={{ fill: isMaxLikes ? '#f43f5e' : 'none' }} />
+                                        <span>{isMaxLikes ? 'MAX' : topic.likes}</span>
+                                    </button>
+                                </div>
+                            );
+                        })}
+                        {filteredAndSortedTopics.length === 0 && (
+                            <div className="no-results">条件に一致するトピックが見つかりません。</div>
+                        )}
+                    </div>
+                )}
 
                 {visibleCount < filteredAndSortedTopics.length && (
                     <div className="load-more-container">
