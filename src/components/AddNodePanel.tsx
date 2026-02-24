@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import './AddNodePanel.css';
 
 interface AddNodePanelProps {
     onAdd: (text: string) => void;
+    onDelete?: () => void;
+    isDeletable?: boolean;
 }
 
-export function AddNodePanel({ onAdd }: AddNodePanelProps) {
+export function AddNodePanel({ onAdd, onDelete, isDeletable }: AddNodePanelProps) {
     const [text, setText] = useState('');
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -31,6 +33,17 @@ export function AddNodePanel({ onAdd }: AddNodePanelProps) {
                     <span>追加</span>
                 </button>
             </form>
+            {isDeletable && (
+                <button
+                    type="button"
+                    className="delete-node-button"
+                    onClick={onDelete}
+                    title="この疑問を削除"
+                >
+                    <Trash2 size={16} />
+                    <span>削除</span>
+                </button>
+            )}
         </div>
     );
 }

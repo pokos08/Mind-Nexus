@@ -27,10 +27,27 @@ const INITIAL_MESSAGE: Message = {
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 };
 
+// ランダムな匿名ユーザー名を生成するヘルパー関数
+const generateAnonymousName = () => {
+    const animals = ['ネコ', 'イヌ', 'ウサギ', 'キツネ', 'タヌキ', 'フクロウ', 'ペンギン', 'イルカ', 'クマ', 'ライオン', 'パンダ', 'コアラ', 'リス', 'ハムスター', 'ヒツジ', 'ゾウ', 'キリン', 'トラ', 'シカ', 'ワニ'];
+    const randomAnimal = animals[Math.floor(Math.random() * animals.length)];
+    const randomId = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    return `匿名${randomAnimal}#${randomId}`;
+};
+
 export function FreeChatPanel({ isOpen, onClose, topicId }: FreeChatPanelProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // ローカルに保存されている自分のユーザー名を取得、なければ新規作成
+    const [userName] = useState(() => {
+        const saved = localStorage.getItem('mindmap_userName');
+        if (saved) return saved;
+        const newName = generateAnonymousName();
+        localStorage.setItem('mindmap_userName', newName);
+        return newName;
+    });
 
     // DBからの初期データロード
     useEffect(() => {
@@ -49,7 +66,7 @@ export function FreeChatPanel({ isOpen, onClose, topicId }: FreeChatPanelProps) 
                     id: m.id,
                     user: m.author,
                     text: m.text,
-                    isMe: m.author === 'あなた', // 簡易的な自分判定（今回は名前ベースのモック）
+                    isMe: m.author === userName, // 自分のユーザー名と一致するか判定
                     timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 }));
 
@@ -79,7 +96,7 @@ export function FreeChatPanel({ isOpen, onClose, topicId }: FreeChatPanelProps) 
                     id: newRecord.id,
                     user: newRecord.author,
                     text: newRecord.text,
-                    isMe: newRecord.author === 'あなた', // 簡易判定
+                    isMe: newRecord.author === userName, // 自分か判定
                     timestamp: new Date(newRecord.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 };
 
@@ -113,10 +130,16 @@ export function FreeChatPanel({ isOpen, onClose, topicId }: FreeChatPanelProps) 
         const textToSave = inputText;
         setInputText(''); // UIをすぐにクリア
 
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(topicId);
+        if (!isUuid) {
+            alert('初期データではチャットのDB保存ができません。新しいトピックを作成してください。');
+            return;
+        }
+
         // Supabaseへ保存（RealtimeのINSERT通知が返ってきて表示される）
         await supabase.from('chat_messages').insert([{
             topic_id: topicId,
-            author: 'あなた', // 簡易的なユーザー名
+            author: userName, // ランダム生成された匿名ユーザー名を使用
             text: textToSave
         }]);
     };

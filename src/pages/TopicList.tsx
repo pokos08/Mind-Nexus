@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Flame, Clock, Heart, Plus, Eye } from 'lucide-react';
+import { Search, Flame, Clock, Heart, Plus, Eye, Trash2 } from 'lucide-react';
 import { initialTopics, Topic } from '../data/topics';
 import { supabase } from '../lib/supabase';
 import './TopicList.css';
@@ -23,9 +23,19 @@ export function TopicList() {
         return savedLikes ? JSON.parse(savedLikes) : {};
     });
 
+    // 自分が作成したトピックのIDを記録
+    const [createdTopicIds, setCreatedTopicIds] = useState<string[]>(() => {
+        const savedTopics = localStorage.getItem('mindmap_createdTopics');
+        return savedTopics ? JSON.parse(savedTopics) : [];
+    });
+
     useEffect(() => {
         localStorage.setItem('mindmap_userLikes', JSON.stringify(userLikes));
     }, [userLikes]);
+
+    useEffect(() => {
+        localStorage.setItem('mindmap_createdTopics', JSON.stringify(createdTopicIds));
+    }, [createdTopicIds]);
 
     // Supabaseからの初期データロード
     useEffect(() => {
@@ -89,6 +99,9 @@ export function TopicList() {
                                 ? { ...t, likes: newRecord.likes, views: newRecord.views }
                                 : t
                         ));
+                    } else if (payload.eventType === 'DELETE') {
+                        const oldRecord = payload.old as any;
+                        setTopics(prev => prev.filter(t => t.id !== oldRecord.id));
                     }
                 }
             )
@@ -142,9 +155,27 @@ export function TopicList() {
             console.error('Error creating topic:', error);
             alert('トピックの作成に失敗しました');
         } else if (data && data[0]) {
-            // INSERT の Realtime サブスクリプションが動くのでここでの手動setTopicsは不要だが、
-            // レスポンス速度のためオプティミスティックUIとして手動で追加してもよい。
-            // 今回はRealtimeで降ってくるのを待つ（必要に応じて即時反映を記述）
+            // 自分が作成したトピックとしてIDを記録
+            setCreatedTopicIds(prev => [...prev, data[0].id]);
+        }
+    };
+
+    const handleDeleteTopic = async (topicId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+
+        if (!window.confirm('このトピックを削除してもよろしいですか？\n削除するとマインドマップやチャット等すべてのデータが消去されます。')) {
+            return;
+        }
+
+        // オプティミスティック更新
+        setTopics(prev => prev.filter(t => t.id !== topicId));
+        setCreatedTopicIds(prev => prev.filter(id => id !== topicId));
+
+        // DB削除
+        const { error } = await supabase.from('topics').delete().eq('id', topicId);
+        if (error) {
+            console.error('Failed to delete topic:', error);
+            alert('削除に失敗しました');
         }
     };
 
@@ -254,6 +285,8 @@ export function TopicList() {
                     <div className="topic-grid">
                         {displayedTopics.map((topic) => {
                             const isMaxLikes = (userLikes[topic.id] || 0) >= 10;
+                            const isCreatedByMe = createdTopicIds.includes(topic.id);
+
                             return (
                                 <div
                                     key={topic.id}
@@ -271,16 +304,27 @@ export function TopicList() {
                                             </span>
                                         </div>
                                     </div>
-                                    <button
-                                        className={`like-btn ${isMaxLikes ? 'maxed' : ''}`}
-                                        onClick={(e) => handleToggleLike(topic.id, e)}
-                                        title={isMaxLikes ? "いいね上限(10回)に達しました" : "いいね！(最大10回)"}
-                                        disabled={isMaxLikes}
-                                        style={{ opacity: isMaxLikes ? 0.7 : 1, cursor: isMaxLikes ? 'default' : 'pointer' }}
-                                    >
-                                        <Heart size={18} className="heart-icon" style={{ fill: isMaxLikes ? '#f43f5e' : 'none' }} />
-                                        <span>{isMaxLikes ? 'MAX' : topic.likes}</span>
-                                    </button>
+                                    <div className="topic-actions">
+                                        {isCreatedByMe && (
+                                            <button
+                                                className="delete-topic-btn"
+                                                onClick={(e) => handleDeleteTopic(topic.id, e)}
+                                                title="作成したトピックを削除"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        )}
+                                        <button
+                                            className={`like-btn ${isMaxLikes ? 'maxed' : ''}`}
+                                            onClick={(e) => handleToggleLike(topic.id, e)}
+                                            title={isMaxLikes ? "いいね上限(10回)に達しました" : "いいね！(最大10回)"}
+                                            disabled={isMaxLikes}
+                                            style={{ opacity: isMaxLikes ? 0.7 : 1, cursor: isMaxLikes ? 'default' : 'pointer' }}
+                                        >
+                                            <Heart size={18} className="heart-icon" style={{ fill: isMaxLikes ? '#f43f5e' : 'none' }} />
+                                            <span>{isMaxLikes ? 'MAX' : topic.likes}</span>
+                                        </button>
+                                    </div>
                                 </div>
                             );
                         })}

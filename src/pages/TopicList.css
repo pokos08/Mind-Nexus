@@ -262,6 +262,31 @@
     transition: all 0.2s;
 }
 
+.topic-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    justify-content: flex-end;
+}
+
+.delete-topic-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid rgba(244, 63, 94, 0.3);
+    color: #f43f5e;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.delete-topic-btn:hover {
+    background: rgba(244, 63, 94, 0.1);
+    border-color: rgba(244, 63, 94, 0.6);
+}
+
 .no-results {
     text-align: center;
     padding: 40px;

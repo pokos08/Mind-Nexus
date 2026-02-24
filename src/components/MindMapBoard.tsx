@@ -140,6 +140,18 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
     const [edges, setEdges] = useState<Edge[]>([]);
     const [isInitialized, setIsInitialized] = useState(false);
 
+    // 自分が作成したノードのIDをローカルに記録
+    const [createdNodeIds, setCreatedNodeIds] = useState<string[]>(() => {
+        const storageKey = `mindmap_createdNodes_${topicId || 'default'}`;
+        const saved = localStorage.getItem(storageKey);
+        return saved ? JSON.parse(saved) : [];
+    });
+
+    useEffect(() => {
+        const storageKey = `mindmap_createdNodes_${topicId || 'default'}`;
+        localStorage.setItem(storageKey, JSON.stringify(createdNodeIds));
+    }, [createdNodeIds, topicId]);
+
     // Supabaseからの初期データロード
     useEffect(() => {
         if (!topicId) return;
@@ -191,6 +203,8 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
                         position_y: 100,
                         parent_id: null
                     }]).then();
+
+                    setCreatedNodeIds(prev => Array.from(new Set([...prev, rootNode.id])));
                 }
 
                 // 初期配置もレイアウト適用
@@ -241,6 +255,26 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
                 });
             })
             // エッジ更新（繋ぎ直し）の場合の削除対応などは省略し、最新状態を手動で計算するロジックはクライアントで担保する前提
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [topicId, isInitialized]);
+
+    // サブスクリプションからの削除イベント対応を追加
+    useEffect(() => {
+        if (!topicId || !isInitialized) return;
+
+        const channel = supabase.channel(`mindmap_delete_${topicId}`)
+            .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'nodes', filter: `topic_id=eq.${topicId}` }, (payload) => {
+                const oldRecord = payload.old as any;
+                setNodes(prev => prev.filter(n => n.id !== oldRecord.id));
+            })
+            .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'edges', filter: `topic_id=eq.${topicId}` }, (payload) => {
+                const oldRecord = payload.old as any;
+                setEdges(prev => prev.filter(e => e.id !== oldRecord.id));
+            })
             .subscribe();
 
         return () => {
@@ -383,6 +417,8 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
                         source: newEdge.source,
                         target: newEdge.target
                     }]).then();
+
+                    setCreatedNodeIds(prev => Array.from(new Set([...prev, newNode.id])));
                 }
 
                 setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
@@ -393,6 +429,39 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
             return layoutedNodes;
         });
     }, [nodes, edges, fitView, topicId]);
+
+    // ノード削除処理
+    const handleDeleteNode = useCallback(async () => {
+        if (!lastClickedNodeId || lastClickedNodeId === 'root' || !topicId) return;
+
+        // 子ノードを持っている場合は削除をブロック（ツリー構造の破壊を防ぐため）
+        const hasChildren = edges.some(e => e.source === lastClickedNodeId);
+        if (hasChildren) {
+            alert('このテーマから下層に新しい疑問が繋がっているため削除できません。先に下層の疑問を削除してください。');
+            return;
+        }
+
+        if (!window.confirm('このノードを削除してもよろしいですか？')) return;
+
+        const targetId = lastClickedNodeId;
+
+        // 楽観的UI更新
+        setNodes(nds => nds.filter(n => n.id !== targetId));
+        setEdges(eds => eds.filter(e => e.source !== targetId && e.target !== targetId));
+        setCreatedNodeIds(prev => prev.filter(id => id !== targetId));
+        setLastClickedNodeId(null);
+
+        // Supabase上から対象のノードと、対象ノードに向かっているエッジを削除
+        await supabase.from('nodes').delete().eq('id', targetId).eq('topic_id', topicId);
+        await supabase.from('edges').delete().or(`source.eq.${targetId},target.eq.${targetId}`).eq('topic_id', topicId);
+
+    }, [lastClickedNodeId, edges, topicId]);
+
+    const isSelectedDeletable = Boolean(
+        lastClickedNodeId &&
+        lastClickedNodeId !== 'root' &&
+        createdNodeIds.includes(lastClickedNodeId)
+    );
 
     return (
         <div className="mindmap-container" style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -412,7 +481,11 @@ const MindMapFlow = ({ initialTopicTitle, topicId }: MindMapBoardProps) => {
                 <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#334155" />
                 <Controls />
             </ReactFlow>
-            <AddNodePanel onAdd={handleAddNode} />
+            <AddNodePanel
+                onAdd={handleAddNode}
+                onDelete={handleDeleteNode}
+                isDeletable={isSelectedDeletable}
+            />
         </div>
     );
 };
